@@ -1,32 +1,60 @@
 const classes = ["apple", "banana", "orange"]; 
 
-let session;
+let session = null;
+
 
 async function loadModel() {
-    session = await ort.InferenceSession.create("fruit_model.onnx");
-    console.log("Model loaded");
+    try {
+        session = await ort.InferenceSession.create("fruit_model.onnx");
+        console.log("Model loaded");
+        console.log("Inputs:", session.inputNames);
+        console.log("Outputs:", session.outputNames);
+    } catch (error) {
+        console.error("Error loading model:", error);
+    }
 }
 
 loadModel();
 
+// Handle image upload
 document.getElementById("imageInput").addEventListener("change", async (event) => {
     const file = event.target.files[0];
+
+    if (!session) {
+        alert("Model not loaded yet!");
+        return;
+    }
 
     const img = document.getElementById("preview");
     img.src = URL.createObjectURL(file);
 
     img.onload = async () => {
-        const tensor = preprocessImage(img);
-        const feeds = { input: tensor };
+        try {
+            const tensor = preprocessImage(img);
 
-        const results = await session.run(feeds);
-        const output = results.output.data;
+           
+            const feeds = {};
+            feeds[session.inputNames[0]] = tensor;
 
-        const prediction = output.indexOf(Math.max(...output));
-        document.getElementById("result").innerText =
-            "Prediction: " + classes[prediction];
+            const results = await session.run(feeds);
+
+        
+            const outputName = session.outputNames[0];
+            const output = results[outputName].data;
+
+            console.log("Raw output:", output);
+
+            const prediction = output.indexOf(Math.max(...output));
+
+            document.getElementById("result").innerText =
+                "Prediction: " + classes[prediction];
+
+        } catch (error) {
+            console.error("Prediction error:", error);
+        }
     };
 });
+
 
 function preprocessImage(image) {
     const canvas = document.createElement("canvas");
@@ -41,9 +69,9 @@ function preprocessImage(image) {
     const floatData = new Float32Array(3 * 224 * 224);
 
     for (let i = 0; i < 224 * 224; i++) {
-        floatData[i] = imageData[i * 4] / 255;         // R
-        floatData[i + 224 * 224] = imageData[i * 4 + 1] / 255; // G
-        floatData[i + 2 * 224 * 224] = imageData[i * 4 + 2] / 255; // B
+        floatData[i] = imageData[i * 4] / 255;                      
+        floatData[i + 224 * 224] = imageData[i * 4 + 1] / 255;      
+        floatData[i + 2 * 224 * 224] = imageData[i * 4 + 2] / 255;  
     }
 
     return new ort.Tensor("float32", floatData, [1, 3, 224, 224]);
